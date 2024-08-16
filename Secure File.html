@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure File Storage System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            margin: 0;
+        }
+
+        .container {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 400px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .file-upload {
+            margin-bottom: 20px;
+        }
+
+        .file-upload input[type="file"] {
+            display: none;
+        }
+
+        .file-upload label {
+            display: inline-block;
+            padding: 10px 20px;
+            font-size: 1rem;
+            background: #1e90ff;
+            color: #fff;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .file-upload label:hover {
+            background: #1c7ed6;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            font-size: 1rem;
+            background: #2ed573;
+            color: #fff;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background 0.3s ease;
+        }
+
+        .btn:hover {
+            background: #28a745;
+        }
+
+        .btn-red {
+            background: #ff4e42;
+        }
+
+        .btn-red:hover {
+            background: #e74c3c;
+        }
+
+        .output {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .output a {
+            text-decoration: none;
+            color: #1e90ff;
+            margin-top: 10px;
+            display: block;
+            font-weight: bold;
+        }
+
+        .output p {
+            font-size: 1rem;
+            color: #333;
+        }
+
+        .filename-input {
+            margin-top: 10px;
+            padding: 10px;
+            font-size: 1rem;
+            width: calc(100% - 22px);
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <h2 style="color: #ff4e42; position: fixed; background: #000;">Note- currently only for txt files</h2>
+    <div class="container">
+        <h1>Secure File Storage System</h1>
+        <div class="file-upload">
+            <input type="file" id="fileInput">
+            <label for="fileInput">Choose File</label>
+        </div>
+        <input type="text" id="filename" class="filename-input" placeholder="Enter file name (optional)">
+        <button class="btn" onclick="encryptFile()">Encrypt & Download</button>
+        <button class="btn btn-red" onclick="decryptFile()">Decrypt & Download</button>
+        <div id="output" class="output">
+            <p id="outputMessage"></p>
+            <a id="downloadLink" href="#" download>Download File</a>
+        </div>
+    </div>
+
+    <script>
+        let originalMimeType = '';
+
+        async function encryptFile() {
+            const fileInput = document.getElementById('fileInput');
+            const filename = document.getElementById('filename').value || 'encrypted_file';
+            if (fileInput.files.length === 0) {
+                alert('Please select a file to encrypt.');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            originalMimeType = file.type; // Store the original MIME type
+            const arrayBuffer = await file.arrayBuffer();
+
+            const key = prompt('Enter encryption key:', '');
+            if (!key) {
+                alert('Encryption key is required.');
+                return;
+            }
+
+            const keyMaterial = await getKeyMaterial(key);
+            const salt = window.crypto.getRandomValues(new Uint8Array(16));
+            const cryptoKey = await getKey(keyMaterial, salt, true);
+            const iv = window.crypto.getRandomValues(new Uint8Array(12));
+            const encryptedArrayBuffer = await encryptData(cryptoKey, arrayBuffer, iv);
+
+            // Combine salt, IV, and encrypted data into one ArrayBuffer
+            const combinedBuffer = new Uint8Array(salt.length + iv.length + encryptedArrayBuffer.byteLength);
+            combinedBuffer.set(salt, 0);
+            combinedBuffer.set(iv, salt.length);
+            combinedBuffer.set(new Uint8Array(encryptedArrayBuffer), salt.length + iv.length);
+
+            // Create a Blob from the combined ArrayBuffer
+            const blob = new Blob([combinedBuffer], { type: 'application/octet-stream' });
+
+            // Set the download link
+            const downloadLink = document.getElementById('downloadLink');
+            downloadLink.href = URL.createObjectURL(blob);
+            downloadLink.download = `${filename}.enc`;
+            downloadLink.style.display = 'inline-block';
+
+            document.getElementById('outputMessage').textContent = 'File encrypted successfully!';
+            document.getElementById('output').style.display = 'block';
+        }
+
+        async function decryptFile() {
+            const fileInput = document.getElementById('fileInput');
+            const filename = document.getElementById('filename').value || 'decrypted_file';
+            if (fileInput.files.length === 0) {
+                alert('Please select an encrypted file to decrypt.');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const arrayBuffer = await file.arrayBuffer();
+
+            const key = prompt('Enter decryption key:', '');
+            if (!key) {
+                alert('Decryption key is required.');
+                return;
+            }
+
+            try {
+                const salt = arrayBuffer.slice(0, 16);
+                const iv = arrayBuffer.slice(16, 28);
+                const encryptedData = arrayBuffer.slice(28);
+
+                const keyMaterial = await getKeyMaterial(key);
+                const cryptoKey = await getKey(keyMaterial, salt, false);
+                const decryptedArrayBuffer = await decryptData(cryptoKey, encryptedData, iv);
+
+                const blob = new Blob([decryptedArrayBuffer], { type: originalMimeType });
+
+                // Set the download link for the decrypted file
+                const downloadLink = document.getElementById('downloadLink');
+                downloadLink.href = URL.createObjectURL(blob);
+                downloadLink.download = filename;
+                downloadLink.textContent = 'Download Decrypted File';
+                downloadLink.style.display = 'inline-block';
+
+                document.getElementById('outputMessage').textContent = 'File decrypted successfully!';
+                document.getElementById('output').style.display = 'block';
+            } catch (e) {
+                alert('Invalid decryption key or corrupted file.');
+            }
+        }
+
+        async function getKeyMaterial(password) {
+            const enc = new TextEncoder();
+            return window.crypto.subtle.importKey(
+                'raw',
+                enc.encode(password),
+                { name: 'PBKDF2' },
+                false,
+                ['deriveKey']
+            );
+        }
+
+        async function getKey(keyMaterial, salt, isEncrypt) {
+            return window.crypto.subtle.deriveKey(
+                {
+                    name: 'PBKDF2',
+                    salt: salt,
+                    iterations: 100000,
+                    hash: 'SHA-256'
+                },
+                keyMaterial,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                isEncrypt ? ['encrypt'] : ['decrypt']
+            );
+        }
+
+        async function encryptData(key, data, iv) {
+            return await window.crypto.subtle.encrypt(
+                {
+                    name: 'AES-GCM',
+                    iv: iv
+                },
+                key,
+                data
+            );
+        }
+
+        async function decryptData(key, data, iv) {
+            return await window.crypto.subtle.decrypt(
+                {
+                    name: 'AES-GCM',
+                    iv: iv
+                },
+                key,
+                data
+            );
+        }
+    </script>
+</body>
+</html>
