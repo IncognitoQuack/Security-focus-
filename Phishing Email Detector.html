@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phishing Email Detector</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            color: #fff;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.2rem;
+            margin-bottom: 20px;
+            color: #fff;
+            text-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 1rem;
+            transition: border 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border: 2px solid #fff;
+        }
+
+        .form-group textarea {
+            resize: none;
+            height: 150px;
+        }
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            background: #1e90ff;
+            color: #fff;
+            font-size: 1.2rem;
+            border: none;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .btn:hover {
+            background: #1c7ed6;
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 1.2rem;
+            display: none;
+        }
+
+        .low-risk {
+            background: #2ed573;
+            color: #fff;
+        }
+
+        .medium-risk {
+            background: #ffa502;
+            color: #fff;
+        }
+
+        .high-risk {
+            background: #ff4e42;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Phishing Email Detector</h1>
+        <form id="email-form">
+            <div class="form-group">
+                <label for="sender">Sender</label>
+                <input type="text" id="sender" placeholder="Enter the sender's email">
+            </div>
+            <div class="form-group">
+                <label for="subject">Subject</label>
+                <input type="text" id="subject" placeholder="Enter the email subject">
+            </div>
+            <div class="form-group">
+                <label for="body">Email Body</label>
+                <textarea id="body" placeholder="Paste the email content here"></textarea>
+            </div>
+            <button type="button" class="btn" onclick="analyzeEmail()">Analyze Email</button>
+        </form>
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        function analyzeEmail() {
+            const sender = document.getElementById('sender').value.toLowerCase();
+            const subject = document.getElementById('subject').value.toLowerCase();
+            const body = document.getElementById('body').value.toLowerCase();
+            const resultDiv = document.getElementById('result');
+
+            let riskLevel = 0;
+            let messages = [];
+
+            // Check for suspicious sender addresses
+            if (sender.includes('no-reply') || sender.includes('admin') || sender.includes('support')) {
+                riskLevel += 2;
+                messages.push('Suspicious sender name.');
+            }
+
+            if (!sender.includes('@') || sender.split('@')[1].includes('.')) {
+                riskLevel += 3;
+                messages.push('Invalid or poorly formatted email address.');
+            }
+
+            // Check for trusted email domains
+            const trustedDomains = ['@gmail.com', '@duck.com', '@proton.me', '@gov.in'];
+            if (!trustedDomains.some(domain => sender.endsWith(domain))) {
+                riskLevel += 3;
+                messages.push('Email domain is not from a trusted source.');
+            }
+
+            // Check for phishing keywords in the subject
+            const phishingKeywords = ['urgent', 'immediate action required', 'account suspended', 'verification needed'];
+            phishingKeywords.forEach(keyword => {
+                if (subject.includes(keyword)) {
+                    riskLevel += 2;
+                    messages.push(`Phishing keyword detected in subject: "${keyword}".`);
+                }
+            });
+
+            // Check for money-related requests in the subject or body
+            const moneyKeywords = ['money', 'payment', 'wire transfer', 'bank transfer', 'funds'];
+            moneyKeywords.forEach(keyword => {
+                if (subject.includes(keyword) || body.includes(keyword)) {
+                    riskLevel += 3;
+                    messages.push(`Request for money detected: "${keyword}".`);
+                }
+            });
+
+            // Check for threats or hacking claims in the body
+            const threatKeywords = ['hacked', 'fir', 'lawsuit', 'legal action', 'i have hacked your account'];
+            threatKeywords.forEach(keyword => {
+                if (body.includes(keyword)) {
+                    riskLevel += 3;
+                    messages.push(`Threat or hacking claim detected: "${keyword}".`);
+                }
+            });
+
+            // Check for suspicious links in the body
+            const urlPattern = /https?:\/\/[^\s]+/g;
+            const urls = body.match(urlPattern);
+            if (urls) {
+                urls.forEach(url => {
+                    if (!url.includes('https') || url.includes('bit.ly') || url.includes('tinyurl')) {
+                        riskLevel += 3;
+                        messages.push(`Suspicious URL detected: "${url}".`);
+                    }
+                });
+            }
+
+            // Check for phishing phrases in the body
+            const phishingPhrases = ['click here', 'login', 'verify your account', 'password', 'update your account'];
+            phishingPhrases.forEach(phrase => {
+                if (body.includes(phrase)) {
+                    riskLevel += 2;
+                    messages.push(`Suspicious phrase detected: "${phrase}".`);
+                }
+            });
+
+            // Determine risk level and display result
+            if (riskLevel <= 3) {
+                resultDiv.className = 'result low-risk';
+                resultDiv.textContent = 'Low Risk: The email seems safe, but stay cautious.';
+            } else if (riskLevel <= 6) {
+                resultDiv.className = 'result medium-risk';
+                resultDiv.textContent = 'Medium Risk: Be cautious, this email has some red flags.';
+            } else {
+                resultDiv.className = 'result high-risk';
+                resultDiv.textContent = 'High Risk: This email appears very suspicious. Avoid interacting with it.';
+            }
+
+            if (messages.length > 0) {
+                resultDiv.textContent += '\n\nRed Flags:\n' + messages.join('\n');
+            }
+
+            resultDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
